@@ -74,6 +74,10 @@ module Anemone
       @opts[:accept_cookies]
     end
 
+    def http_request_headers
+      @opts[:http_request_headers] || {}
+    end
+
     private
 
     #
@@ -102,12 +106,10 @@ module Anemone
     #
     def get_response(url, referer = nil)
       full_path = url.query.nil? ? url.path : "#{url.path}?#{url.query}"
-
-      opts = {}
+      opts = http_request_headers.dup
       opts['User-Agent'] = user_agent if user_agent
       opts['Referer'] = referer.to_s if referer
       opts['Cookie'] = @cookie_store.to_s unless @cookie_store.empty? || (!accept_cookies? && @opts[:cookies].nil?)
-
       retries = 0
       begin
         start = Time.now()

@@ -256,7 +256,9 @@ module Anemone
                                           :discard_page_bodies => true,
                                           :user_agent => 'test',
                                           :obey_robots_txt => true,
-                                          :depth_limit => 3)
+                                          :depth_limit => 3,
+                                          :http_request_headers => {'Authorization' => 'Basic dXNlcm5hbWU6cGFzc3dvcmQ='}
+                                          )
 
         core.opts[:verbose].should == false
         core.opts[:threads].should == 2
@@ -265,6 +267,7 @@ module Anemone
         core.opts[:user_agent].should == 'test'
         core.opts[:obey_robots_txt].should == true
         core.opts[:depth_limit].should == 3
+        core.opts[:http_request_headers].should == {'Authorization' => 'Basic dXNlcm5hbWU6cGFzc3dvcmQ='}
       end
 
       it "should accept options via setter methods in the crawl block" do

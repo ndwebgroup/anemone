@@ -40,6 +40,8 @@ module Anemone
       :depth_limit => false,
       # number of times HTTP redirects will be followed
       :redirect_limit => 5,
+      # additional HTTP request headers
+      :http_request_headers => {},
       # storage engine defaults to Hash in +process_options+ if none specified
       :storage => nil,
       # Hash of cookie name => value to send with HTTP requests
