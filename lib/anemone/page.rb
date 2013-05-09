@@ -59,10 +59,10 @@ module Anemone
       @links = []
       return @links if !doc
 
-      doc.css('a').each do |a|
-        u = a.attributes['href'].content rescue nil
+      doc.search("//a[@href]").each do |a|
+        u = a['href']
         next if u.nil? or u.empty?
-        abs = to_absolute(URI(u)) rescue next
+        abs = to_absolute(u) rescue next
         @links << abs if in_domain?(abs)
       end
       @links.uniq!
@@ -120,7 +120,7 @@ module Anemone
     # otherwise.
     #
     def redirect?
-      (300..399).include?(@code)
+      (300..307).include?(@code)
     end
 
     #
@@ -132,6 +132,21 @@ module Anemone
     end
 
     #
+    # Base URI from the HTML doc head element
+    # http://www.w3.org/TR/html4/struct/links.html#edef-BASE
+    #
+    def base
+      @base = if doc
+        href = doc.search('//head/base/@href')
+        URI(href.to_s) unless href.nil? rescue nil
+      end unless @base
+      
+      return nil if @base && @base.to_s().empty?
+      @base
+    end
+
+
+    #
     # Converts relative URL *link* into an absolute URL based on the
     # location of the page
     #
@@ -139,10 +154,10 @@ module Anemone
       return nil if link.nil?
 
       # remove anchor
-      link = URI.encode(link.to_s.gsub(/#[a-zA-Z0-9_-]*$/,''))
+      link = URI.encode(URI.decode(link.to_s.gsub(/#[a-zA-Z0-9_-]*$/,'')))
 
       relative = URI(link)
-      absolute = @url.merge(relative)
+      absolute = base ? base.merge(relative) : @url.merge(relative)
 
       absolute.path = '/' if absolute.path.empty?
 
@@ -165,5 +180,38 @@ module Anemone
       @url, @headers, @data, @body, @links, @code, @visited, @depth, @referer, @redirect_to, @response_time, @fetched = ary
     end
 
+    def to_hash
+      {'url' => @url.to_s,
+       'headers' => Marshal.dump(@headers),
+       'data' => Marshal.dump(@data),
+       'body' => @body,
+       'links' => links.map(&:to_s), 
+       'code' => @code,
+       'visited' => @visited,
+       'depth' => @depth,
+       'referer' => @referer.to_s,
+       'redirect_to' => @redirect_to.to_s,
+       'response_time' => @response_time,
+       'fetched' => @fetched}
+    end
+
+    def self.from_hash(hash)
+      page = self.new(URI(hash['url']))
+      {'@headers' => Marshal.load(hash['headers']),
+       '@data' => Marshal.load(hash['data']),
+       '@body' => hash['body'],
+       '@links' => hash['links'].map { |link| URI(link) },
+       '@code' => hash['code'].to_i,
+       '@visited' => hash['visited'],
+       '@depth' => hash['depth'].to_i,
+       '@referer' => hash['referer'],
+       '@redirect_to' => (!!hash['redirect_to'] && !hash['redirect_to'].empty?) ? URI(hash['redirect_to']) : nil,
+       '@response_time' => hash['response_time'].to_i,
+       '@fetched' => hash['fetched']
+      }.each do |var, value|
+        page.instance_variable_set(var, value)
+      end
+      page
+    end
   end
 end

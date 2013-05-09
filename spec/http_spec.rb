@@ -1,4 +1,4 @@
-require File.dirname(__FILE__) + '/spec_helper'
+require 'spec_helper'
 
 module Anemone
   describe HTTP do
@@ -9,12 +9,7 @@ module Anemone
       end
 
       it "should still return a Page if an exception occurs during the HTTP connection" do
-        class HTTP
-          def refresh_connection
-            raise "test exception"
-          end
-        end
-
+        HTTP.stub!(:refresh_connection).and_raise(StandardError)
         http = Anemone::HTTP.new
         http.fetch_page(SPEC_DOMAIN).should be_an_instance_of(Page)
       end

@@ -1,13 +1,15 @@
 require 'thread'
-require 'robots'
+require 'robotex'
 require 'anemone/tentacle'
 require 'anemone/page'
+require 'anemone/exceptions'
 require 'anemone/page_store'
 require 'anemone/storage'
+require 'anemone/storage/base'
 
 module Anemone
 
-  VERSION = '0.4.0';
+  VERSION = '0.7.2';
 
   #
   # Convenience method to start a crawl
@@ -47,7 +49,15 @@ module Anemone
       # Hash of cookie name => value to send with HTTP requests
       :cookies => nil,
       # accept cookies from the server and send them back?
-      :accept_cookies => false
+      :accept_cookies => false,
+      # skip any link with a query string? e.g. http://foo.com/?u=user
+      :skip_query_strings => false,
+      # proxy server hostname 
+      :proxy_host => nil,
+      # proxy server port number
+      :proxy_port => false,
+      # HTTP read timeout in seconds
+      :read_timeout => nil
     }
 
     # Create setter methods for all options to be called from the crawl block
@@ -189,8 +199,9 @@ module Anemone
     def process_options
       @opts = DEFAULT_OPTS.merge @opts
       @opts[:threads] = 1 if @opts[:delay] > 0
-      @pages = PageStore.new(@opts[:storage] || Anemone::Storage.Hash)
-      @robots = Robots.new(@opts[:user_agent]) if @opts[:obey_robots_txt]
+      storage = Anemone::Storage::Base.new(@opts[:storage] || Anemone::Storage.Hash)
+      @pages = PageStore.new(storage)
+      @robots = Robotex.new(@opts[:user_agent]) if @opts[:obey_robots_txt]
 
       freeze_options
     end
@@ -243,15 +254,42 @@ module Anemone
     # Returns +false+ otherwise.
     #
     def visit_link?(link, from_page = nil)
-      allowed = @opts[:obey_robots_txt] ? @robots.allowed?(link) : true
+      !@pages.has_page?(link) &&
+      !skip_link?(link) &&
+      !skip_query_string?(link) &&
+      allowed(link) &&
+      !too_deep?(from_page)
+    end
 
+    #
+    # Returns +true+ if we are obeying robots.txt and the link
+    # is granted access in it. Always returns +true+ when we are
+    # not obeying robots.txt.
+    #
+    def allowed(link)
+      @opts[:obey_robots_txt] ? @robots.allowed?(link) : true
+    rescue
+      false
+    end
+
+    #
+    # Returns +true+ if we are over the page depth limit.
+    # This only works when coming from a page and with the +depth_limit+ option set.
+    # When neither is the case, will always return +false+.
+    def too_deep?(from_page)
       if from_page && @opts[:depth_limit]
-        too_deep = from_page.depth >= @opts[:depth_limit]
+        from_page.depth >= @opts[:depth_limit]
       else
-        too_deep = false
+        false
       end
-
-      !@pages.has_page?(link) && !skip_link?(link) && allowed && !too_deep
+    end
+    
+    #
+    # Returns +true+ if *link* should not be visited because
+    # it has a query string and +skip_query_strings+ is true.
+    #
+    def skip_query_string?(link)
+      @opts[:skip_query_strings] && link.query
     end
 
     #

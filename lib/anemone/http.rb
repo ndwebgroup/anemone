@@ -43,7 +43,7 @@ module Anemone
         end
 
         return pages
-      rescue => e
+      rescue Exception => e
         if verbose?
           puts e.inspect
           puts e.backtrace
@@ -77,6 +77,26 @@ module Anemone
     def http_request_headers
       @opts[:http_request_headers] || {}
     end
+    #
+    # The proxy address string
+    #
+    def proxy_host
+      @opts[:proxy_host]
+    end
+
+    #
+    # The proxy port
+    #
+    def proxy_port
+      @opts[:proxy_port]
+    end
+
+    #
+    # HTTP read timeout in seconds
+    #
+    def read_timeout
+      @opts[:read_timeout]
+    end
 
     private
 
@@ -95,7 +115,7 @@ module Anemone
 
           response, response_time = get_response(loc, referer)
           code = Integer(response.code)
-          redirect_to = response.is_a?(Net::HTTPRedirection) ?  URI(response['location']) : nil
+          redirect_to = response.is_a?(Net::HTTPRedirection) ? URI(response['location']).normalize : nil
           yield response, code, loc, redirect_to, response_time
           limit -= 1
       end while (loc = redirect_to) && allowed?(redirect_to, url) && limit > 0
@@ -113,12 +133,17 @@ module Anemone
       retries = 0
       begin
         start = Time.now()
-        response = connection(url).get(full_path, opts)
+        # format request
+        req = Net::HTTP::Get.new(full_path, opts)
+        # HTTP Basic authentication
+        req.basic_auth url.user, url.password if url.user
+        response = connection(url).request(req)
         finish = Time.now()
         response_time = ((finish - start) * 1000).round
         @cookie_store.merge!(response['Set-Cookie']) if accept_cookies?
         return response, response_time
-      rescue EOFError
+      rescue Timeout::Error, Net::HTTPBadResponse, EOFError => e
+        puts e.inspect if verbose?
         refresh_connection(url)
         retries += 1
         retry unless retries > 3
@@ -136,12 +161,16 @@ module Anemone
     end
 
     def refresh_connection(url)
-      http = Net::HTTP.new(url.host, url.port)
+      http = Net::HTTP.new(url.host, url.port, proxy_host, proxy_port)
+
+      http.read_timeout = read_timeout if !!read_timeout
+
       if url.scheme == 'https'
         http.use_ssl = true
         http.verify_mode = OpenSSL::SSL::VERIFY_NONE
       end
-      @connections[url.host][url.port] = http.start
+
+      @connections[url.host][url.port] = http.start 
     end
 
     def verbose?

@@ -1,5 +1,6 @@
-require File.dirname(__FILE__) + '/spec_helper'
-%w[pstore tokyo_cabinet].each { |file| require "anemone/storage/#{file}.rb" }
+$:.unshift(File.dirname(__FILE__))
+require 'spec_helper'
+%w[pstore tokyo_cabinet sqlite3 mongodb redis].each { |file| require "anemone/storage/#{file}.rb" }
 
 module Anemone
   describe PageStore do
@@ -9,7 +10,7 @@ module Anemone
     end
 
     shared_examples_for "page storage" do
-      it "should be able to computer single-source shortest paths in-place" do
+      it "should be able to compute single-source shortest paths in-place" do
         pages = []
         pages << FakePage.new('0', :links => ['1', '3'])
         pages << FakePage.new('1', :redirect => '2')
@@ -101,7 +102,7 @@ module Anemone
         @opts = {:storage => Storage.PStore(@test_file)}
       end
 
-      after(:all) do
+      after(:each) do
         File.delete(@test_file) if File.exists?(@test_file)
       end
     end
@@ -119,8 +120,50 @@ module Anemone
         @store.close
       end
 
-      after(:all) do
+      after(:each) do
         File.delete(@test_file) if File.exists?(@test_file)
+      end
+    end
+
+    describe Storage::SQLite3 do
+      it_should_behave_like "page storage"
+
+      before(:each) do
+        @test_file = 'test.db'
+        File.delete(@test_file) if File.exists?(@test_file)
+        @opts = {:storage => @store = Storage.SQLite3(@test_file)}
+      end
+
+      after(:each) do
+        @store.close
+      end
+
+      after(:each) do
+        File.delete(@test_file) if File.exists?(@test_file)
+      end
+    end
+
+    describe Storage::MongoDB do
+      it_should_behave_like "page storage"
+
+      before(:each) do
+        @opts = {:storage => @store = Storage.MongoDB}
+      end
+
+      after(:each) do
+        @store.close
+      end
+    end
+
+    describe Storage::Redis do
+      it_should_behave_like "page storage"
+
+      before(:each) do
+        @opts = {:storage => @store = Storage.Redis}
+      end
+
+      after(:each) do
+        @store.close
       end
     end
 
